@@ -76,7 +76,66 @@ googling terms like mesh silouette finding detection.
   
   ### MAIN SCRIPT ### ----------------------------------------------------------
 
+  
+  def self.catch_shadows
+    model = Sketchup.active_model
+    selection = model.selection
+    context = model.active_entities
+    direction = model.shadow_info['SunDirection'].reverse
+    
+    # Validate input
+    faces = selection.select { |e|
+      e.is_a?( Sketchup::Face ) &&
+      e.receives_shadows?
+    }
+    rest = self.select_visible_instances( selection.to_a - faces )
+    if faces.empty?
+      UI.messagebox( 'There must be a face receiving shadows in the selection.' )
+      return nil
+    elsif faces.size > 1
+      UI.messagebox( 'There can be only one face receiving shadows in the selection.' )
+      return nil
+    end
+    
+    target_face = faces.first
+    
+    model.start_operation( 'Catch Shadows' )
+    
+    if rest.empty?
+      rest = self.select_visible_instances( model.active_entities )
+    end
+    
+    if rest.empty?
+      UI.messagebox( 'There is no geometry to cast shadow.' )
+      return nil
+    end
 
+    for instance in rest
+      definition = TT::Instance.definition( instance )
+      entities = definition.entities
+      transformation = instance.transformation
+      shadows, ground_area = self.shadows_from_entities( target_face, entities, transformation, direction )
+      # Trim Shadows
+      trim_group = self.create_trim_group( target_face, context )
+      trim_group_definition = TT::Instance.definition( trim_group )
+      for shadow in shadows.entities
+        self.trim_to_face( target_face, shadow.entities, transformation, trim_group_definition )
+      end
+      trim_group.erase!
+      # Merge shadow groups into one.
+      self.merge_instances( shadows.entities )
+      # Output area data.
+      self.calculate_shadow_statistics( target_face, shadows.entities, ground_area )
+      # Organize.
+      shadows.layer = self.get_shadow_layer
+      shadows.name = "Shadows: #{self.get_formatted_shadow_time}"
+    end
+    
+    model.commit_operation
+    
+  end
+  
+  
   # Intersect doesn't always split the mesh like you would expect.
   # 
   # A +
@@ -122,66 +181,6 @@ googling terms like mesh silouette finding detection.
       e.casts_shadows? &&
       ( e.visible? && e.layer.visible? )
     }
-  end
-  
-  
-  def self.catch_shadows
-    model = Sketchup.active_model
-    selection = model.selection
-    context = model.active_entities
-    direction = model.shadow_info['SunDirection'].reverse
-    
-    # Validate input
-    faces = selection.select { |e|
-      e.is_a?( Sketchup::Face ) &&
-      e.receives_shadows?
-    }
-    rest = self.select_visible_instances( selection.to_a - faces )
-    if faces.empty?
-      UI.messagebox( 'There must be a face receiving shadows in the selection.' )
-      return nil
-    elsif faces.size > 1
-      UI.messagebox( 'There can be only one face receiving shadows in the selection.' )
-      return nil
-    end
-    
-    target_face = faces.first
-    
-    model.start_operation( 'Catch Shadows' )
-    
-    if rest.empty?
-      rest = self.select_visible_instances( model.active_entities )
-    end
-    
-    if rest.empty?
-      UI.messagebox( 'There is no geometry to cast shadow.' )
-      return nil
-    end
-
-    for instance in rest
-      definition = TT::Instance.definition( instance )
-      entities = definition.entities
-      transformation = instance.transformation
-      shadows, ground_area = self.shadows_from_entities( target_face, entities, transformation, direction )
-      # Trim Shadows
-      trim_group = self.create_trim_group( target_face, context )
-      trim_group_definition = TT::Instance.definition( trim_group )
-      for shadow in shadows.entities
-        #self.trim_to_face( target_face, shadow.entities, shadow.transformation )
-        self.trim_to_face( target_face, shadow.entities, transformation, trim_group_definition )
-      end
-      trim_group.erase!
-      # Merge shadow groups into one.
-      self.merge_instances( shadows.entities )
-      # Output area data.
-      self.calculate_shadow_statistics( target_face, shadows.entities, ground_area )
-      # Organize.
-      shadows.layer = self.get_shadow_layer
-      shadows.name = "Shadows: #{self.get_formatted_shadow_time}"
-    end
-    
-    model.commit_operation
-    
   end
   
   
@@ -302,38 +301,17 @@ googling terms like mesh silouette finding detection.
   
   def self.trim_to_face( face, entities, transformation, trim_group )
     g = entities.add_instance( trim_group, transformation.inverse )
-=begin
-    # Create intersection group.
-    g = entities.add_group
-    tr = transformation.inverse
-    #r = face.model.edit_transform.inverse
-    for edge in face.edges
-      points = edge.vertices.map { |v| v.position.transform( tr ) }
-      #points = edge.vertices.map { |v| v.position }
-      g.entities.add_line( *points )
-    end
-=end
     # Intersect with trim edges.
     tr0 = Geom::Transformation.new
     entities.intersect_with(
-      false, # (intersection lines will be put inside of groups and components within this entities object).
-      tr0, # The transformation for this entities object.
+      false,    # (intersection lines will be put inside of groups and components within this entities object).
+      tr0,      # The transformation for this entities object.
       entities, # The entities object where you want the intersection lines to appear.
-      tr0, # The transformation for entities1. 
-      false, # true if you want hidden geometry in this entities object to be used in the intersection.
-      g # A single entity, or an array of entities.
+      tr0,      # The transformation for entities1. 
+      false,    # true if you want hidden geometry in this entities object to be used in the intersection.
+      g         # A single entity, or an array of entities.
     )
     g.erase!
-=begin
-    entities.intersect_with(
-      false, # (intersection lines will be put inside of groups and components within this entities object).
-      transformation.inverse, # The transformation for this entities object.
-      entities, # The entities object where you want the intersection lines to appear.
-      transformation.inverse, # The transformation for entities1. 
-      false, # true if you want hidden geometry in this entities object to be used in the intersection.
-      face # A single entity, or an array of entities.
-    )
-=end
     # Remove geometry that is outside the target.
     outside = []
     for edge in entities.to_a
@@ -372,7 +350,6 @@ googling terms like mesh silouette finding detection.
     # Target
     context = target_face.parent.entities
     target_normal = target_face.normal.transform( transformation )
-    #target_plane = target_face.plane
     plane = [target_face.vertices.first.position, target_face.normal]
     target_plane = plane.map { |x| x.transform( transformation ) }
     
@@ -462,16 +439,7 @@ googling terms like mesh silouette finding detection.
     for shadow in shadows
       se = shadow.entities
       tr = Geom::Transformation.new
-      for polygon in ground_polygons
-        #g = se.add_group
-        #g.entities.add_face( polygon )
-        #g.explode
-        
-        #face = se.add_face( polygon )
-        #face.erase!
-        #self.split_at_vertices( se )
-        #se.intersect_with( false, tr, se, tr, true, face )
-        
+      for polygon in ground_polygons       
         # Create a face representing the ground polygon and erase it.
         face = se.add_face( polygon )
         # If edges of the new face overlaps the shadow face it might not split
@@ -490,7 +458,6 @@ googling terms like mesh silouette finding detection.
           # Remove stray edges
           if edge.faces.empty?
             redundant_edges << edge
-            #edge.erase!
             next
           end
           # Remove edges inside ground polygon.
@@ -498,7 +465,6 @@ googling terms like mesh silouette finding detection.
           mid = Geom.linear_combination( 0.5, pt1, 0.5, pt2 )
           next unless Geom.point_in_polygon_2D( mid, polygon, false )
           redundant_edges << edge
-          #edge.erase!
         end
         se.erase_entities( redundant_edges )
       end
@@ -510,7 +476,6 @@ googling terms like mesh silouette finding detection.
         next unless edge.is_a?( Sketchup::Edge )
         next if edge.faces.size == 1
         redundant_edges << edge
-        #edge.erase!
       end
       se.erase_entities( redundant_edges )
     end # for
