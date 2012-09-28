@@ -77,18 +77,26 @@ googling terms like mesh silouette finding detection.
   ### MAIN SCRIPT ### ----------------------------------------------------------
 
   
+  # Projects shadows from instances in the current context onto selected face.
+  # 
+  # Shadow casting instances can be limited by selecting the instances that
+  # should cast shadows.
+  # 
+  # @since 1.0.0
   def self.catch_shadows
     model = Sketchup.active_model
     selection = model.selection
     context = model.active_entities
     direction = model.shadow_info['SunDirection'].reverse
     
-    # Validate input
+    # Validate User Input
+    # Ensure there is one, and only one, face that receives shadows in the 
+    # selection.
     faces = selection.select { |e|
       e.is_a?( Sketchup::Face ) &&
       e.receives_shadows?
     }
-    rest = self.select_visible_instances( selection.to_a - faces )
+    instances = self.select_visible_instances( selection.to_a - faces )
     if faces.empty?
       UI.messagebox( 'There must be a face receiving shadows in the selection.' )
       return nil
@@ -96,40 +104,48 @@ googling terms like mesh silouette finding detection.
       UI.messagebox( 'There can be only one face receiving shadows in the selection.' )
       return nil
     end
-    
-    target_face = faces.first
-    
-    model.start_operation( 'Catch Shadows' )
-    
-    if rest.empty?
-      rest = self.select_visible_instances( model.active_entities )
+    # If no instances are selected then all instances in the current context is
+    # processed.
+    # 
+    # (?) Detect and ignore previously processed shadow groups?
+    if instances.empty?
+      instances = self.select_visible_instances( model.active_entities )
     end
-    
-    if rest.empty?
+    # Ensure there is something to cast shadows.
+    if instances.empty?
       UI.messagebox( 'There is no geometry to cast shadow.' )
       return nil
     end
+    
+    model.start_operation( 'Catch Shadows' )
 
-    for instance in rest
+    target_face = faces.first             # Face to catch shadows for.
+    instance_shadows = context.add_group  # Group containing generated shadows.
+    for instance in instances
+      # Cast shadows from the instance onto the plane of the target face.
       definition = TT::Instance.definition( instance )
       entities = definition.entities
       transformation = instance.transformation
-      shadows, ground_area = self.shadows_from_entities( target_face, entities, transformation, direction )
-      # Trim Shadows
+      shadows, ground_area = self.shadows_from_entities(
+        target_face, entities, transformation, direction, instance_shadows.entities
+      )
+      # Trim shadows to the target face.
       trim_group = self.create_trim_group( target_face, context )
       trim_group_definition = TT::Instance.definition( trim_group )
       for shadow in shadows.entities
         self.trim_to_face( target_face, shadow.entities, transformation, trim_group_definition )
       end
       trim_group.erase!
-      # Merge shadow groups into one.
+      # Merge shadows from each mesh group into one.
       self.merge_instances( shadows.entities )
-      # Output area data.
-      self.calculate_shadow_statistics( target_face, shadows.entities, ground_area )
-      # Organize.
-      shadows.layer = self.get_shadow_layer
-      shadows.name = "Shadows: #{self.get_formatted_shadow_time}"
     end
+    # Merge shadows from all instances into one.
+    self.merge_instances( instance_shadows.entities )
+    # Organize shadow group into a layer with a descriptive name.
+    instance_shadows.layer = self.get_shadow_layer
+    instance_shadows.name = "Shadows: #{self.get_formatted_shadow_time}"
+    # Output area data.
+    self.calculate_shadow_statistics( target_face, instance_shadows.entities, ground_area )
     
     model.commit_operation
     
@@ -346,9 +362,9 @@ googling terms like mesh silouette finding detection.
   end
   
   
-  def self.shadows_from_entities( target_face, entities, transformation, direction )    
+  def self.shadows_from_entities( target_face, entities, transformation, direction, context )    
     # Target
-    context = target_face.parent.entities
+    #context = target_face.parent.entities
     target_normal = target_face.normal.transform( transformation )
     plane = [target_face.vertices.first.position, target_face.normal]
     target_plane = plane.map { |x| x.transform( transformation ) }
