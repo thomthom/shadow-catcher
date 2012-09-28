@@ -55,8 +55,8 @@ googling terms like mesh silouette finding detection.
   
   unless file_loaded?( __FILE__ )
     # Menus
-    menu = TT.menu( 'Tools' )
-    menu.add_item( 'Shadow Catcher' ) { self.catch_shadows }
+    menu = TT.menu( 'Plugins' )
+    menu.add_item( 'Catch Shadows' ) { self.catch_shadows }
   end 
   
   
