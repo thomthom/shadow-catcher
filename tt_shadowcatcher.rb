@@ -119,6 +119,7 @@ googling terms like mesh silouette finding detection.
   def self.select_visible_instances( entities )
     entities.select { |e|
       TT::Instance.is?( e ) &&
+      e.casts_shadows? &&
       ( e.visible? && e.layer.visible? )
     }
   end
@@ -131,10 +132,16 @@ googling terms like mesh silouette finding detection.
     direction = model.shadow_info['SunDirection'].reverse
     
     # Validate input
-    faces = selection.select { |e| e.is_a?( Sketchup::Face ) }
+    faces = selection.select { |e|
+      e.is_a?( Sketchup::Face ) &&
+      e.receives_shadows?
+    }
     rest = self.select_visible_instances( selection.to_a - faces )
-    unless faces.size == 1
-      UI.messagebox( 'There must be one face and only one in the selection.' )
+    if faces.empty?
+      UI.messagebox( 'There must be a face receiving shadows in the selection.' )
+      return nil
+    elsif faces.size > 1
+      UI.messagebox( 'There can be only one face receiving shadows in the selection.' )
       return nil
     end
     
@@ -417,9 +424,10 @@ googling terms like mesh silouette finding detection.
       shadow = shadow_group.entities
       for edge in mesh
         next unless edge.is_a?( Sketchup::Edge )
-        next if edge.faces.empty?
-        if edge.faces.size > 1
-          dots = edge.faces.map { |face| direction % face.normal < 0 }
+        shadow_faces = edge.faces.select { |face| face.casts_shadows? }
+        next if shadow_faces.empty?
+        if shadow_faces.size > 1
+          dots = shadow_faces.map { |face| direction % face.normal < 0 }
           next if dots.all? { |dot| dot == dots.first }
         end
         # Visualize sun outline.
