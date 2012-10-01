@@ -337,11 +337,12 @@ googling terms like mesh silouette finding detection.
       result = face.classify_point( pt.transform(transformation) )
       error = result == Sketchup::Face::PointUnknown
       inside = result <= Sketchup::Face::PointOnEdge 
-      
-      #entities.add_cpoint( pt )
-      #entities.add_cpoint( pt.offset( Z_AXIS, 10.m ) ) if inside
-      #entities.add_cline( pt,  pt.offset( Z_AXIS, 10.m ) )
-      
+      # <debug>
+      # Visualize mid points which is checked to be inside the face.
+      # entities.add_cpoint( pt )
+      # entities.add_cpoint( pt.offset( Z_AXIS, 10.m ) ) if inside
+      # entities.add_cline( pt,  pt.offset( Z_AXIS, 10.m ) )
+      # </debug>
       next if inside
       
       outside << edge
@@ -400,11 +401,6 @@ googling terms like mesh silouette finding detection.
 
     # Output Groups
     # Destination groups with the faces representing the shadows.
-    outline_group = context.add_group
-    outline_group.transform!( transformation )
-    #outline_group.material = 'red'
-    outline = outline_group.entities
-
     shadows_group = context.add_group
     shadows_group.transform!( transformation )
     shadows_group.material = self.get_shadow_material
@@ -425,12 +421,11 @@ googling terms like mesh silouette finding detection.
           dots = shadow_faces.map { |face| direction % face.normal < 0 }
           next if dots.all? { |dot| dot == dots.first }
         end
-        # Visualize sun outline.
-        outline.add_line( edge.vertices.map { |v| v.position } )
         # Project outlines to target plane.
         rays = edge.vertices.map { |v| [ v.position, direction ] }
         points = rays.map { |ray| Geom.intersect_line_plane( ray, target_plane ) }
         # <debug>
+        # Visualize projected rays onto target plane.
         # for i in (0...rays.size)
         #   shadow.add_cline( rays[i][0], points[i] )
         #   shadow.add_cpoint( rays[i][0] )
@@ -505,9 +500,6 @@ googling terms like mesh silouette finding detection.
       end
       se.erase_entities( redundant_edges )
     end # for
-    
-    #outline_group.material = 'red'
-    outline_group.erase!
     
     [ shadows_group, ground_area ]
   end
