@@ -117,23 +117,23 @@ googling terms like mesh silouette finding detection.
       return nil
     end
     
-    model.start_operation( 'Catch Shadows' )
+    model.start_operation( 'Catch Shadows', true )
 
     target_face = faces.first             # Face to catch shadows for.
     instance_shadows = context.add_group  # Group containing generated shadows.
     for instance in instances
       # Cast shadows from the instance onto the plane of the target face.
-      definition = TT::Instance.definition( instance )
-      entities = definition.entities
       transformation = instance.transformation
       shadows, ground_area = self.shadows_from_entities(
-        target_face, entities, transformation, direction, instance_shadows.entities
+        target_face, instance, direction
       )
       # Trim shadows to the target face.
       trim_group = self.create_trim_group( target_face, context )
       trim_group_definition = TT::Instance.definition( trim_group )
       for shadow in shadows.entities
-        self.trim_to_face( target_face, shadow.entities, transformation, trim_group_definition )
+        self.trim_to_face(
+          target_face, shadow.entities, transformation, trim_group_definition
+        )
       end
       trim_group.erase!
       # Merge shadows from each mesh group into one.
@@ -145,7 +145,9 @@ googling terms like mesh silouette finding detection.
     instance_shadows.layer = self.get_shadow_layer
     instance_shadows.name = "Shadows: #{self.get_formatted_shadow_time}"
     # Output area data.
-    self.calculate_shadow_statistics( target_face, instance_shadows.entities, ground_area )
+    self.calculate_shadow_statistics(
+      target_face, instance_shadows.entities, ground_area
+    )
     
     model.commit_operation
     
@@ -189,7 +191,7 @@ googling terms like mesh silouette finding detection.
     temp_group.explode
     nil
   end
-  
+ 
   
   def self.select_visible_instances( entities )
     entities.select { |e|
@@ -316,8 +318,8 @@ googling terms like mesh silouette finding detection.
   
   
   def self.trim_to_face( face, entities, transformation, trim_group )
-    g = entities.add_instance( trim_group, transformation.inverse )
     # Intersect with trim edges.
+    g = entities.add_instance( trim_group, transformation.inverse )
     tr0 = Geom::Transformation.new
     entities.intersect_with(
       false,    # (intersection lines will be put inside of groups and components within this entities object).
@@ -363,7 +365,16 @@ googling terms like mesh silouette finding detection.
   end
   
   
-  def self.shadows_from_entities( target_face, entities, transformation, direction, context )    
+  def self.shadows_from_entities( target_face, instance, direction )
+    # Source instance.
+    transformation = instance.transformation
+    definition = TT::Instance.definition( instance )
+    entities = definition.entities
+
+    # Entities collection containing the target face and where the shadows will
+    # be created.
+    context = target_face.parent.entities
+  
     # Target
     # Transform target plane and sun direction into the coordinates of the
     # instance - this avoids transforming every 3D point in this mesh to the
