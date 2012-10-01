@@ -364,12 +364,14 @@ googling terms like mesh silouette finding detection.
   
   def self.shadows_from_entities( target_face, entities, transformation, direction, context )    
     # Target
-    #context = target_face.parent.entities
-    target_normal = target_face.normal.transform( transformation )
+    # Transform target plane and sun direction into the coordinates of the
+    # instance - this avoids transforming every 3D point in this mesh to the
+    # parent and should be faster.
+    to_local = transformation.inverse
+    target_normal = target_face.normal.transform( to_local )
     plane = [target_face.vertices.first.position, target_face.normal]
-    target_plane = plane.map { |x| x.transform( transformation ) }
-    
-    to_local = transformation
+    target_plane = plane.map { |x| x.transform( to_local ) }
+    direction = direction.transform( to_local )
 
     # Ground Polygons
     # These are the faces we cast shaodows from on the target plane. These are
@@ -399,12 +401,12 @@ googling terms like mesh silouette finding detection.
     # Output Groups
     # Destination groups with the faces representing the shadows.
     outline_group = context.add_group
-    outline_group.transform!( to_local )
-    outline_group.material = 'red'
+    outline_group.transform!( transformation )
+    #outline_group.material = 'red'
     outline = outline_group.entities
 
     shadows_group = context.add_group
-    shadows_group.transform!( to_local )
+    shadows_group.transform!( transformation )
     shadows_group.material = self.get_shadow_material
     shadows = shadows_group.entities
 
@@ -428,6 +430,13 @@ googling terms like mesh silouette finding detection.
         # Project outlines to target plane.
         rays = edge.vertices.map { |v| [ v.position, direction ] }
         points = rays.map { |ray| Geom.intersect_line_plane( ray, target_plane ) }
+        # <debug>
+        # for i in (0...rays.size)
+        #   shadow.add_cline( rays[i][0], points[i] )
+        #   shadow.add_cpoint( rays[i][0] )
+        #   shadow.add_cpoint( points[i] )
+        # end
+        # </debug>
         shadow.add_line( points )
       end
     end
@@ -441,6 +450,7 @@ googling terms like mesh silouette finding detection.
       se.intersect_with( false, tr, se, tr, true, se.to_a )
       # Find all possible faces.
       for edge in shadow.entities.to_a
+        next unless edge.is_a?( Sketchup::Edge )
         edge.find_faces
       end
       # Clean up inner edges.
@@ -496,6 +506,7 @@ googling terms like mesh silouette finding detection.
       se.erase_entities( redundant_edges )
     end # for
     
+    #outline_group.material = 'red'
     outline_group.erase!
     
     [ shadows_group, ground_area ]
