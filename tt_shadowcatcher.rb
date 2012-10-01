@@ -173,6 +173,7 @@ googling terms like mesh silouette finding detection.
   # @param [Sketchup::Entities] entities
   # 
   # @return [Nil]
+  # @since 1.0.0
   def self.split_at_vertices( entities )
     edges = entities.select { |e| e.is_a?( Sketchup::Edge ) }
     vertices = edges.map { |edge| edge.vertices }
@@ -193,6 +194,15 @@ googling terms like mesh silouette finding detection.
   end
  
   
+  # Return all instance that casts shadows.
+  # 
+  # @note This method does not check parent path for visibility or shadow 
+  #       casting.
+  #
+  # @param [Sketchup::Entities] entities
+  # 
+  # @return [Array<Sketchup::Group|Sketchup::ComponentInstance>]
+  # @since 1.0.0
   def self.select_visible_instances( entities )
     entities.select { |e|
       TT::Instance.is?( e ) &&
@@ -202,6 +212,8 @@ googling terms like mesh silouette finding detection.
   end
   
   
+  # @return [String] The current model time in a readable string.
+  # @since 1.0.0
   def self.get_formatted_shadow_time
     model = Sketchup.active_model
     time = model.shadow_info['ShadowTime'].getutc
@@ -209,6 +221,11 @@ googling terms like mesh silouette finding detection.
   end
   
   
+  # Ensures there's a layer for the current shadow named based on the current
+  # model time. The layer will be visible to the current scene only.
+  #
+  # @return [Sketchup::Layer]
+  # @since 1.0.0
   def self.get_shadow_layer
     model = Sketchup.active_model
     layername = "02 - #{self.get_formatted_shadow_time}"
@@ -224,6 +241,12 @@ googling terms like mesh silouette finding detection.
   end
   
   
+  # @param [Sketchup::Face] ground_face
+  # @param [Sketchup::Entities] entities
+  # @param [Numeric] footprint_area Size of area to be excluded.
+  # 
+  # @return [Nil]
+  # @since 1.0.0
   def self.calculate_shadow_statistics( ground_face, shadow_entities, footprint_area )
     model = ground_face.model
     entities = ground_face.parent.entities
@@ -269,9 +292,14 @@ googling terms like mesh silouette finding detection.
     model.selection.clear
     note = model.add_note( output, 0.4, 0.1 )
     note.layer = self.get_shadow_layer
+    nil
   end
   
   
+  # @param [Sketchup::Entities] entities
+  # 
+  # @return [Numeric]
+  # @since 1.0.0
   def self.total_area( entities )
     area = 0.0
     for face in entities
@@ -282,15 +310,24 @@ googling terms like mesh silouette finding detection.
   end
   
   
+  # @param [Sketchup::Entities] entities
+  # 
+  # @return [Nil]
+  # @since 1.0.0
   def self.merge_instances( entities )
     for entity in entities.to_a
       next unless TT::Instance.is?( entity )
       entity.explode
     end
     self.remove_inner_faces( entities )
+    nil
   end
   
   
+  # @param [Sketchup::Entities] entities
+  # 
+  # @return [Nil]
+  # @since 1.0.0
   def self.remove_inner_faces( entities )
     inner_edges = []
     for entity in entities
@@ -301,6 +338,11 @@ googling terms like mesh silouette finding detection.
   end
   
   
+  # @param [Sketchup::Face] face
+  # @param [Sketchup::Entities] entities
+  # 
+  # @return [Sketchup::Group]
+  # @since 1.0.0
   def self.create_trim_group( face, entities )
     group = entities.add_group
     for edge in face.edges
@@ -311,12 +353,23 @@ googling terms like mesh silouette finding detection.
   end
   
   
+  # @param [Sketchup::Edge] edge
+  # 
+  # @return [Geom::Point3d]
+  # @since 1.0.0
   def self.mid_point( edge )
     pt1, pt2 = edge.vertices.map { |v| v.position }
     mid = Geom.linear_combination( 0.5, pt1, 0.5, pt2 )
   end
   
   
+  # @param [Sketchup::Edge] face
+  # @param [Sketchup::Entities] entities
+  # @param [Geom::Transformation] transformation
+  # @param [Sketchup::Group] trim_group
+  # 
+  # @return [Nil]
+  # @since 1.0.0
   def self.trim_to_face( face, entities, transformation, trim_group )
     # Intersect with trim edges.
     g = entities.add_instance( trim_group, transformation.inverse )
@@ -350,9 +403,12 @@ googling terms like mesh silouette finding detection.
       outside << edge
     end
     entities.erase_entities( outside )
+    nil
   end
   
   
+  # @return [Sketchup::Material]
+  # @since 1.0.0
   def self.get_shadow_material
     model = Sketchup.active_model
     m = model.materials[ SHADOWS_MATERIAL_NAME ]
@@ -365,6 +421,12 @@ googling terms like mesh silouette finding detection.
   end
   
   
+  # @param [Sketchup::Edge] target_face
+  # @param [Sketchup::Group, Sketchup::ComponentInstance] instance
+  # @param [Geom::Vector3d] direction
+  # 
+  # @return [Array<Sketchup::Group, Numeric>]
+  # @since 1.0.0
   def self.shadows_from_entities( target_face, instance, direction )
     # Source instance.
     transformation = instance.transformation
