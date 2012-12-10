@@ -281,8 +281,8 @@ googling terms like mesh silouette finding detection.
          Ground Area: #{ground_area} ( #{ground_percent}% of Site )
       Footprint Area: #{footprint_area} ( #{footprint_percent}% of Site )
       
-               Sun Area: #{sun_area} (#{sun_percent}% of Ground )
-        Shadow Area: #{shadow_area} (#{shadow_percent}% of Ground )
+               Sun Area: #{sun_area} ( #{sun_percent}% of Ground )
+        Shadow Area: #{shadow_area} ( #{shadow_percent}% of Ground )
     EOT
     while model.active_path
       # If a note is added while not in root context it will shift about when
