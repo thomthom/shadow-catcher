@@ -125,10 +125,10 @@ googling terms like mesh silouette finding detection.
       # Cast shadows from the instance onto the plane of the target face.
       transformation = instance.transformation
       shadows, ground_area = self.shadows_from_entities(
-        target_face, instance, direction
+        target_face, instance, direction, instance_shadows.entities
       )
       # Trim shadows to the target face.
-      trim_group = self.create_trim_group( target_face, context )
+      trim_group = self.create_trim_group( target_face, instance_shadows.entities )
       trim_group_definition = TT::Instance.definition( trim_group )
       for shadow in shadows.entities
         self.trim_to_face(
@@ -150,7 +150,6 @@ googling terms like mesh silouette finding detection.
     )
     
     model.commit_operation
-    
   end
   
   
@@ -427,7 +426,7 @@ googling terms like mesh silouette finding detection.
   # 
   # @return [Array<Sketchup::Group, Numeric>]
   # @since 1.0.0
-  def self.shadows_from_entities( target_face, instance, direction )
+  def self.shadows_from_entities( target_face, instance, direction, context )
     # Source instance.
     transformation = instance.transformation
     definition = TT::Instance.definition( instance )
@@ -435,7 +434,7 @@ googling terms like mesh silouette finding detection.
 
     # Entities collection containing the target face and where the shadows will
     # be created.
-    context = target_face.parent.entities
+    #context = target_face.parent.entities
   
     # Target
     # Transform target plane and sun direction into the coordinates of the
